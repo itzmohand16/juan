@@ -1,0 +1,112 @@
+<?php
+include_once('main.php');
+$freeway = [];
+function authenticate($username, $password) {
+    
+     $configFile = './safeassets/config.json';
+
+    
+    if (!file_exists($configFile)) {
+        responde(true, "auth");
+    }
+    
+    
+    $configData = file_get_contents($configFile);
+    if ($configData === false) {
+        responde(true, "auth");
+    }
+    
+    $config = json_decode($configData, true);
+    
+    
+    if ($config === null) {
+        responde(true, "auth");
+    }   
+     
+    
+    $usernamev = $config['username'];
+    $passwordv = $config['password'];
+
+    return ($username === $usernamev && $password === $passwordv);
+}
+
+if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+    $authorizationHeader = $_SERVER['HTTP_AUTHORIZATION'];
+    $credentials = base64_decode(substr($authorizationHeader, 6)); 
+
+    list($username, $password) = explode(':', $credentials, 2);
+
+    if (authenticate($username, $password)) {
+        if (isset($_GET['request'])){
+            if ($_GET['request'] == "new"){
+                $uploadedFile = $_FILES['file'];
+    
+    if ($uploadedFile['error'] === UPLOAD_ERR_OK) {
+        $destination = 'uploads/' . $uploadedFile['name'];
+        move_uploaded_file($uploadedFile['tmp_name'], $destination);
+        $title = $_POST['title'];
+        $des = $_POST['description'];
+        $headline = $_POST['headline'];
+        $query = "INSERT INTO posts (title, desc, file, headline) VALUES ('$title', '$des', '$destination', '$headline')";
+        $result = $db->exec($query);
+        if (!$result) {
+            responde(true, "post failed");
+        }
+        responde(false, "post created");
+    } else {
+        responde(true, "post failed");
+    }
+            }else if ($_GET['request'] == 'modify' && isset($_GET['id'])){
+                $uploadedFile = $_FILES['file'];
+                $id = $_GET['id'];
+                $destination = 'uploads/' . $uploadedFile['name'];
+                move_uploaded_file($uploadedFile['tmp_name'], $destination);
+                $title = $_POST['title'];
+                $des = $_POST['description'];
+                
+                $headline = $_POST['headline'];
+        $result = $db->exec("UPDATE `posts` SET `title` = '".$title."', `desc` = '".$des."', `file` = '".$destination."', `headline` = '".$headline."' WHERE `id` = $id");
+        if (!$result) {
+            responde(true, "post failed");
+        }
+        responde(false, "post modified");
+            }else if ($_GET['request'] == 'delete' && isset($_GET['id'])){
+                $id = $_GET['id'];
+                $getselect = "SELECT * FROM posts WHERE id = :id";
+$stmt = $db->prepare($getselect);
+$stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+$result = $stmt->execute();
+if (!$result) {
+    responde(true, "post failed");
+}
+$post = $result->fetchArray(SQLITE3_ASSOC);
+    //@unlink($post['file']);
+    // Attempt to delete the file
+    $query = "DELETE FROM posts WHERE id = ".$id;
+        $result = $db->exec($query);
+        if (!$result) {
+            responde(true, "post failed");
+        }
+        header('Location: /admin.php');
+
+        
+            }else if ($_GET['request'] == 'uploader'){
+                $uploadedFile = $_FILES['file'];
+                $destination = 'uploads/' . $uploadedFile['name'];
+                move_uploaded_file($uploadedFile['tmp_name'], $destination);
+            }else{
+                responde(true, "post failed");
+            }
+        }
+        
+        
+    } else {
+        header('HTTP/1.1 401 Unauthorized');
+        responde(true, "auth");
+    }
+} else {
+    header('HTTP/1.1 401 Unauthorized');
+    responde(true, "auth");
+}
+
+?>
